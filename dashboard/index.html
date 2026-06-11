@@ -504,7 +504,7 @@ function buildDistChart(data) {
 
 async function init() {
   document.getElementById('lastUpdate').textContent = 'Actualizando...';
-  const recent = await fetchSupabase('select=*');
+  const recent = await fetchSupabase('select=sector,timestamp,humedad_pct,llovio,precip_mm&order=timestamp.desc&limit=100');
   allData = recent;
   renderSectors(recent);
   buildDistChart(recent);
