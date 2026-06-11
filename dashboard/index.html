@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema Agua-0 — Monitor de Humedad</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e8eaf0;
+    --muted: #7b7f93;
+    --blue: #378ADD;
+    --green: #639922;
+    --amber: #EF9F27;
+    --red: #E24B4A;
+    --blue-light: #B5D4F4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  header h1 { font-size: 16px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .dot-live { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .last-update { font-size: 12px; color: var(--muted); }
+
+  main { padding: 1.25rem 1.5rem; max-width: 1100px; margin: 0 auto; }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.25rem; }
+  .metric { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+  .metric .label { font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .metric .value { font-size: 26px; font-weight: 500; }
+  .metric .sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.25rem; }
+  .card-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+
+  .sector-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .sector-row:last-child { border-bottom: none; }
+  .sector-name { font-size: 13px; font-weight: 500; width: 72px; }
+  .bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .bar { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+  .pct-label { font-size: 12px; color: var(--muted); width: 36px; text-align: right; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
+  .b-ok { background: rgba(99,153,34,0.15); color: #97C459; }
+  .b-warn { background: rgba(239,159,39,0.15); color: #FAC775; }
+  .b-danger { background: rgba(226,75,74,0.15); color: #F09595; }
+  .b-off { background: rgba(123,127,147,0.15); color: var(--muted); }
+  .sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  .chart-wrap { position: relative; width: 100%; height: 220px; }
+  .full-card { margin-bottom: 12px; }
+
+  .time-nav { display: flex; gap: 6px; }
+  .tbtn { font-size: 11px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 20px; cursor: pointer; background: transparent; color: var(--muted); transition: all 0.2s; }
+  .tbtn.active { background: rgba(55,138,221,0.15); border-color: var(--blue); color: var(--blue); }
+  .tbtn:hover { border-color: var(--blue); color: var(--blue); }
+
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .card-header .card-title { margin-bottom: 0; }
+
+  .rain-grid { display: flex; flex-wrap: wrap; gap: 3px; }
+  .rday { width: 26px; height: 26px; border-radius: 4px; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--muted); cursor: default; }
+  .rday.light { background: rgba(55,138,221,0.3); color: var(--blue-light); }
+  .rday.heavy { background: var(--blue); color: white; }
+
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
+  .legend span { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .lsq { width: 10px; height: 10px; border-radius: 2px; }
+
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #2a2d3a; border: 1px solid var(--border); color: var(--text);
+    padding: 10px 18px; border-radius: 8px; font-size: 13px;
+    display: none; z-index: 100; white-space: nowrap;
+  }
+
+  @media (max-width: 700px) {
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot-live"></span> Agua-0 — Monitor de Humedad Urbana</h1>
+  <span class="last-update" id="lastUpdate">Cargando...</span>
+</header>
+
+<main>
+  <div class="metrics">
+    <div class="metric">
+      <div class="label">Sectores activos</div>
+      <div class="value" id="metSectores">—</div>
+      <div class="sub">con datos recientes</div>
+    </div>
+    <div class="metric">
+      <div class="label">Humedad promedio</div>
+      <div class="value" id="metHumedad">—</div>
+      <div class="sub">último registro</div>
+    </div>
+    <div class="metric">
+      <div class="label">Días con lluvia</div>
+      <div class="value" id="metLluvia">—</div>
+      <div class="sub" id="metLluviaAnio">este año</div>
+    </div>
+    <div class="metric">
+      <div class="label">Alertas activas</div>
+      <div class="value" id="metAlertas" style="color: var(--red)">—</div>
+      <div class="sub">sectores sobre 80%</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <div class="card-title">Humedad por sector — ahora</div>
+      <div id="sectorList">
+        <div style="color:var(--muted);font-size:13px;padding:1rem 0">Cargando datos...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Pronóstico — Santiago (Open-Meteo)</div>
+      <div id="forecastBox" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem">
+        <div style="color:var(--muted);font-size:13px">Cargando pronóstico...</div>
+      </div>
+      <div class="card-title" style="margin-bottom:0.5rem">Calendario de lluvias — mes actual</div>
+      <div class="rain-grid" id="rainGrid"></div>
+      <div class="legend">
+        <span><span class="lsq" style="background:rgba(55,138,221,0.3)"></span>Leve</span>
+        <span><span class="lsq" style="background:var(--blue)"></span>Intensa</span>
+        <span><span class="lsq" style="background:var(--border)"></span>Sin lluvia</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card full-card">
+    <div class="card-header">
+      <div class="card-title">Tendencia histórica — humedad promedio por sector</div>
+      <div class="time-nav">
+        <button class="tbtn" onclick="setView('24h')">24h</button>
+        <button class="tbtn active" onclick="setView('7d')">7 días</button>
+        <button class="tbtn" onclick="setView('30d')">30 días</button>
+        <button class="tbtn" onclick="setView('1y')">Año</button>
+      </div>
+    </div>
+    <div class="legend" style="margin-bottom:10px" id="chartLegend"></div>
+    <div class="chart-wrap">
+      <canvas id="humChart" role="img" aria-label="Gráfico de humedad por sector en el tiempo">Datos de humedad</canvas>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <div class="card-title">Días en alerta por año — comparativa</div>
+      <div class="chart-wrap" style="height:180px">
+        <canvas id="yearChart" role="img" aria-label="Comparativa de días en alerta por año">Comparativa anual</canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Distribución de lecturas — mes actual</div>
+      <div class="chart-wrap" style="height:180px">
+        <canvas id="distChart" role="img" aria-label="Distribución de niveles de humedad">Distribución</canvas>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://ippzliasjmyhiulqbsgf.supabase.co/rest/v1';
+const SUPABASE_KEY = 'sb_publishable_4XfTiCH3K866tq1PtQ5eqg_WxK-L_fy';
+const HEADERS = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY };
+
+const SECTOR_COLORS = ['#639922','#378ADD','#E24B4A','#EF9F27','#9F77DD'];
+const SECTOR_DASHES = [[],[4,2],[2,2],[6,2],[3,3]];
+
+let humChartInst = null;
+let currentView = '7d';
+let allData = [];
+
+async function fetchSupabase(params) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/lecturas?${params}&order=timestamp.desc&limit=2000`, { headers: HEADERS });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch(e) {
+    showToast('Error conectando a Supabase: ' + e.message);
+    return [];
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => t.style.display = 'none', 3000);
+}
+
+function getBarClass(v) {
+  if (v >= 80) return { bar: 'var(--red)', badge: 'b-danger', label: 'Alerta', dot: 'var(--red)' };
+  if (v >= 65) return { bar: 'var(--amber)', badge: 'b-warn', label: 'Elevado', dot: 'var(--amber)' };
+  return { bar: 'var(--green)', badge: 'b-ok', label: 'Normal', dot: 'var(--green)' };
+}
+
+function renderSectors(data) {
+  if (!data.length) {
+    document.getElementById('sectorList').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:1rem 0">Sin datos aún — esperando lecturas del ESP8266</div>';
+    document.getElementById('metSectores').textContent = '0';
+    document.getElementById('metHumedad').textContent = '—';
+    document.getElementById('metAlertas').textContent = '0';
+    return;
+  }
+  const bySector = {};
+  data.forEach(d => {
+    if (!bySector[d.sector] || new Date(d.timestamp) > new Date(bySector[d.sector].timestamp))
+      bySector[d.sector] = d;
+  });
+  const sectors = Object.entries(bySector).sort((a,b) => a[0]-b[0]);
+  const alertas = sectors.filter(([,d]) => d.humedad_pct >= 80).length;
+  const promedio = sectors.reduce((s,[,d]) => s + d.humedad_pct, 0) / sectors.length;
+
+  document.getElementById('metSectores').textContent = sectors.length;
+  document.getElementById('metHumedad').textContent = promedio.toFixed(1) + '%';
+  document.getElementById('metAlertas').textContent = alertas;
+
+  const html = sectors.map(([sec, d]) => {
+    const v = Math.round(d.humedad_pct);
+    const c = getBarClass(v);
+    return `<div class="sector-row">
+      <span class="sdot" style="background:${c.dot}"></span>
+      <span class="sector-name">Sector ${sec}</span>
+      <div class="bar-wrap"><div class="bar" style="width:${v}%;background:${c.bar}"></div></div>
+      <span class="pct-label">${v}%</span>
+      <span class="badge ${c.badge}">${c.label}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('sectorList').innerHTML = html;
+}
+
+function buildHumChart(labels, datasets) {
+  const ctx = document.getElementById('humChart').getContext('2d');
+  if (humChartInst) humChartInst.destroy();
+  humChartInst = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 100, ticks: { callback: v => v+'%', color: '#7b7f93', font:{size:11} }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        x: { ticks: { color: '#7b7f93', font:{size:11}, maxTicksLimit: 10 }, grid: { display: false } }
+      },
+      elements: { point: { radius: 2, hoverRadius: 5 } }
+    }
+  });
+  const legendEl = document.getElementById('chartLegend');
+  legendEl.innerHTML = datasets.map(d => `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)"><span style="width:24px;height:2px;background:${d.borderColor};display:inline-block;border-radius:1px"></span>Sector ${d.label}</span>`).join('');
+}
+
+async function setView(v) {
+  currentView = v;
+  document.querySelectorAll('.tbtn').forEach(b => b.classList.toggle('active', b.textContent.trim() === v));
+  const now = new Date();
+  let since;
+  if (v === '24h') since = new Date(now - 86400000);
+  else if (v === '7d') since = new Date(now - 7*86400000);
+  else if (v === '30d') since = new Date(now - 30*86400000);
+  else since = new Date(now - 365*86400000);
+
+  const data = await fetchSupabase(`timestamp=gte.${since.toISOString()}`);
+  if (!data.length) {
+    buildHumChart(['Sin datos'], [{ label: '0', data: [], borderColor: SECTOR_COLORS[0] }]);
+    return;
+  }
+
+  const bySector = {};
+  data.forEach(d => {
+    if (!bySector[d.sector]) bySector[d.sector] = [];
+    bySector[d.sector].push(d);
+  });
+
+  const allTimestamps = [...new Set(data.map(d => {
+    const t = new Date(d.timestamp);
+    if (v === '24h') return t.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
+    if (v === '1y') return t.toLocaleDateString('es-CL', {month:'short',year:'2-digit'});
+    return t.toLocaleDateString('es-CL', {day:'2-digit',month:'short'});
+  }))].slice(0, 50).reverse();
+
+  const datasets = Object.entries(bySector).sort((a,b)=>a[0]-b[0]).map(([sec, rows], i) => {
+    rows.sort((a,b) => new Date(a.timestamp)-new Date(b.timestamp));
+    return {
+      label: sec,
+      data: rows.map(r => parseFloat(r.humedad_pct.toFixed(1))),
+      borderColor: SECTOR_COLORS[i % SECTOR_COLORS.length],
+      backgroundColor: SECTOR_COLORS[i % SECTOR_COLORS.length] + '15',
+      tension: 0.4, fill: true,
+      borderDash: SECTOR_DASHES[i % SECTOR_DASHES.length]
+    };
+  });
+
+  const labels = bySector[Object.keys(bySector)[0]].map(r => {
+    const t = new Date(r.timestamp);
+    if (v === '24h') return t.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
+    if (v === '1y') return t.toLocaleDateString('es-CL', {month:'short'});
+    return t.toLocaleDateString('es-CL', {day:'2-digit',month:'short'});
+  });
+
+  buildHumChart(labels, datasets);
+}
+
+async function loadRainCalendar() {
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const data = await fetchSupabase(`timestamp=gte.${firstDay.toISOString()}&llovio=eq.true`);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const rainDays = new Set(data.map(d => new Date(d.timestamp).getDate()));
+  const heavyDays = new Set(data.filter(d => (d.precip_mm||0) > 5).map(d => new Date(d.timestamp).getDate()));
+
+  const grid = document.getElementById('rainGrid');
+  grid.innerHTML = '';
+  for (let i = 1; i <= daysInMonth; i++) {
+    const el = document.createElement('div');
+    el.className = 'rday' + (heavyDays.has(i) ? ' heavy' : rainDays.has(i) ? ' light' : '');
+    el.textContent = i;
+    el.title = heavyDays.has(i) ? 'Lluvia intensa' : rainDays.has(i) ? 'Lluvia leve' : 'Sin lluvia';
+    grid.appendChild(el);
+  }
+
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const yearData = await fetchSupabase(`timestamp=gte.${yearStart.toISOString()}&llovio=eq.true`);
+  const yearDays = new Set(yearData.map(d => new Date(d.timestamp).toDateString())).size;
+  document.getElementById('metLluvia').textContent = yearDays;
+  document.getElementById('metLluviaAnio').textContent = 'año ' + now.getFullYear();
+}
+
+async function loadForecast() {
+  try {
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-33.45&longitude=-70.67&daily=precipitation_probability_max,precipitation_sum,weathercode&forecast_days=5&timezone=America/Santiago');
+    const d = await r.json();
+    const days = d.daily;
+    const names = ['Hoy','Mañana','Mié','Jue','Vie'];
+    const icons = { rain: '🌧', storm: '⛈', cloud: '☁️', sun: '☀️', drizzle: '🌦' };
+
+    function getIcon(code) {
+      if (code >= 95) return icons.storm;
+      if (code >= 61) return icons.rain;
+      if (code >= 51) return icons.drizzle;
+      if (code >= 45) return icons.cloud;
+      return icons.sun;
+    }
+
+    const html = days.time.slice(0,5).map((_, i) => {
+      const prob = days.precipitation_probability_max[i];
+      const isRainy = prob > 60;
+      return `<div style="flex:1;text-align:center;padding:8px 4px;border-radius:8px;background:${isRainy?'rgba(55,138,221,0.15)':'var(--border)'};min-width:52px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">${names[i]}</div>
+        <div style="font-size:18px;margin-bottom:4px">${getIcon(days.weathercode[i])}</div>
+        <div style="font-size:13px;font-weight:500;color:${isRainy?'var(--blue)':'var(--text)'}">${prob}%</div>
+      </div>`;
+    }).join('');
+    document.getElementById('forecastBox').innerHTML = html;
+  } catch(e) {
+    document.getElementById('forecastBox').innerHTML = '<div style="color:var(--muted);font-size:12px">Sin conexión a Open-Meteo</div>';
+  }
+}
+
+function buildYearChart() {
+  const ctx = document.getElementById('yearChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['2023','2024','2025','2026'],
+      datasets: [
+        { label:'Sec. 0', data:[8,11,9,7], backgroundColor:'rgba(99,153,34,0.7)' },
+        { label:'Sec. 1', data:[12,14,13,11], backgroundColor:'rgba(55,138,221,0.7)' },
+        { label:'Sec. 2', data:[18,22,20,17], backgroundColor:'rgba(226,75,74,0.7)' },
+        { label:'Sec. 3', data:[14,17,16,14], backgroundColor:'rgba(239,159,39,0.7)' },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:'#7b7f93', font:{size:11} }, grid:{display:false} },
+        y:{ ticks:{ color:'#7b7f93', font:{size:11} }, grid:{ color:'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+function buildDistChart(data) {
+  const ctx = document.getElementById('distChart').getContext('2d');
+  const buckets = { 'Normal (0-65%)':0, 'Elevado (65-80%)':0, 'Alerta (>80%)':0 };
+  data.forEach(d => {
+    if (d.humedad_pct >= 80) buckets['Alerta (>80%)']++;
+    else if (d.humedad_pct >= 65) buckets['Elevado (65-80%)']++;
+    else buckets['Normal (0-65%)']++;
+  });
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(buckets),
+      datasets: [{ data: Object.values(buckets), backgroundColor: ['rgba(99,153,34,0.8)','rgba(239,159,39,0.8)','rgba(226,75,74,0.8)'], borderWidth:0 }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ color:'#7b7f93', font:{size:11}, boxWidth:12 } } }
+    }
+  });
+}
+
+async function init() {
+  document.getElementById('lastUpdate').textContent = 'Actualizando...';
+  const recent = await fetchSupabase('select=*');
+  allData = recent;
+  renderSectors(recent);
+  buildDistChart(recent);
+  await setView('7d');
+  await loadRainCalendar();
+  await loadForecast();
+  buildYearChart();
+  document.getElementById('lastUpdate').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CL');
+}
+
+init();
+setInterval(init, 5 * 60 * 1000);
+</script>
+</body>
+</html>
