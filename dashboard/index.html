@@ -31,6 +31,54 @@
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
   .last-update { font-size: 12px; color: var(--muted); }
 
+  /* ── Cinta de alertas ── */
+  #alertBanner {
+    display: none;
+    background: rgba(226,75,74,0.12);
+    border-bottom: 1px solid rgba(226,75,74,0.35);
+    padding: 0;
+    overflow: hidden;
+    height: 36px;
+    position: relative;
+  }
+  #alertBanner.visible { display: block; }
+  .alert-track {
+    display: flex; align-items: center;
+    white-space: nowrap;
+    position: absolute; top: 0; left: 0;
+    height: 100%;
+    animation: scroll-left 18s linear infinite;
+  }
+  .alert-track:hover { animation-play-state: paused; }
+  @keyframes scroll-left {
+    0%   { transform: translateX(100vw); }
+    100% { transform: translateX(-100%); }
+  }
+  .alert-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    margin-right: 48px;
+    font-size: 12px; font-weight: 500;
+  }
+  .alert-chip .chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink:0; }
+  .alert-chip .chip-dot.danger { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .alert-chip .chip-dot.warn   { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .alert-chip .chip-val { font-weight: 700; }
+  .alert-chip.danger { color: #F09595; }
+  .alert-chip.warn   { color: #FAC775; }
+  .alert-label {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    display: flex; align-items: center;
+    padding: 0 14px;
+    background: rgba(226,75,74,0.25);
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    color: #F09595; text-transform: uppercase;
+    border-right: 1px solid rgba(226,75,74,0.3);
+    z-index: 2; white-space: nowrap;
+  }
+  .alert-scroll-wrap {
+    margin-left: 110px; height: 100%; overflow: hidden; position: relative;
+  }
+
   main { padding: 1.25rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 
   .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.25rem; }
@@ -95,6 +143,14 @@
   <h1><span class="dot-live"></span> Agua-0 — Monitor de Humedad Urbana</h1>
   <span class="last-update" id="lastUpdate">Cargando...</span>
 </header>
+
+<!-- Cinta de alertas — visible solo si hay sectores sobre umbral -->
+<div id="alertBanner">
+  <span class="alert-label">⚠ Alertas</span>
+  <div class="alert-scroll-wrap">
+    <div class="alert-track" id="alertTrack"></div>
+  </div>
+</div>
 
 <main>
   <div class="metrics">
@@ -213,7 +269,32 @@ function getBarClass(v) {
   return { bar: 'var(--green)', badge: 'b-ok', label: 'Normal', dot: 'var(--green)' };
 }
 
-function renderSectors(data) {
+function renderAlertBanner(sectors) {
+  const banner = document.getElementById('alertBanner');
+  const track  = document.getElementById('alertTrack');
+
+  // UMBRAL ALERTA: 80 | UMBRAL ELEVADO: 65 — ajustar tras calibración del sensor
+  const alerts = sectors.filter(([,d]) => d.humedad_pct >= 65)
+    .sort((a,b) => b[1].humedad_pct - a[1].humedad_pct);
+
+  if (!alerts.length) { banner.classList.remove('visible'); return; }
+  banner.classList.add('visible');
+
+  const chips = alerts.map(([sec, d]) => {
+    const v = Math.round(d.humedad_pct);
+    const isDanger = v >= 80;
+    const tipo = isDanger ? 'DESBORDAMIENTO' : 'NIVEL ELEVADO';
+    return `<span class="alert-chip ${isDanger?'danger':'warn'}">
+      <span class="chip-dot ${isDanger?'danger':'warn'}"></span>
+      Sector ${sec} — ${tipo} &nbsp;<span class="chip-val">${v}%</span>
+    </span>`;
+  }).join('');
+
+  // Duplicar para loop continuo
+  track.innerHTML = chips + chips + chips;
+}
+
+
   if (!data.length) {
     document.getElementById('sectorList').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:1rem 0">Sin datos aún — esperando lecturas del ESP8266</div>';
     document.getElementById('metSectores').textContent = '0';
@@ -227,6 +308,7 @@ function renderSectors(data) {
       bySector[d.sector] = d;
   });
   const sectors = Object.entries(bySector).sort((a,b) => a[0]-b[0]);
+  renderAlertBanner(sectors);
   const alertas = sectors.filter(([,d]) => d.humedad_pct >= 80).length;
   const promedio = sectors.reduce((s,[,d]) => s + d.humedad_pct, 0) / sectors.length;
 
