@@ -144,7 +144,6 @@
   <span class="last-update" id="lastUpdate">Cargando...</span>
 </header>
 
-<!-- Cinta de alertas — visible solo si hay sectores sobre umbral -->
 <div id="alertBanner">
   <span class="alert-label">⚠ Alertas</span>
   <div class="alert-scroll-wrap">
@@ -273,7 +272,6 @@ function renderAlertBanner(sectors) {
   const banner = document.getElementById('alertBanner');
   const track  = document.getElementById('alertTrack');
 
-  // UMBRAL ALERTA: 80 | UMBRAL ELEVADO: 65 — ajustar tras calibración del sensor
   const alerts = sectors.filter(([,d]) => d.humedad_pct >= 65)
     .sort((a,b) => b[1].humedad_pct - a[1].humedad_pct);
 
@@ -290,11 +288,10 @@ function renderAlertBanner(sectors) {
     </span>`;
   }).join('');
 
-  // Duplicar para loop continuo
   track.innerHTML = chips + chips + chips;
 }
 
-
+function renderSectors(data) {
   if (!data.length) {
     document.getElementById('sectorList').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:1rem 0">Sin datos aún — esperando lecturas del ESP8266</div>';
     document.getElementById('metSectores').textContent = '0';
