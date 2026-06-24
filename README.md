@@ -57,7 +57,11 @@ agua-0/
 ├── diseño-3d/
 │   ├── encapsulado.f3d             # Modelo Fusion 360
 │   ├── planos.pdf                  # Planos técnicos con cotas
-│   └── renders/                    # Renders del encapsulado
+│   └── renders/                    # Renders del Encapsulado             
+│       ├── render_exterior.png
+│       ├── render_cuerpo_1.png
+│       ├── render_cuerpo_2.png
+│       └── render_cuerpo_3.png
 ├── testing/
 │   └── protocolo_pruebas.md        # Protocolo y resultados de pruebas
 └── docs/
