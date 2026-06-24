@@ -8,10 +8,9 @@
 | 3 | Sensor de nivel de agua | Sensor nivel de agua FZ0506 5-5V esp32 Arduino | 1 | $1.200 | $1.200 |
 | 4 | LED RGB | Cátodo común, 5mm, 20mA máx por canal | 1 | $200 | $200 |
 | 5 | Batería LiPo | AHB623450, 3.7V, ~1200mAh | 1 | $4.500 | $4.500 |
-| 6 | Resistencias | 220Ω (para LED RGB) | 3 | $20 | $60 |
-| 7 | Cables jumper | Macho-macho y macho-hembra, 20cm | 10 | $80 | $800 |
-| 8 | Protoboard | 400 puntos | 1 | $1.500 | $1.500 |
-| | | | | **TOTAL** | **$20.260** |
+| 6 | Cables jumper | Macho-macho y macho-hembra, 20cm | 10 | $80 | $800 |
+| 7 | Protoboard | 400 puntos | 1 | $1.500 | $1.500 |
+| | | | | **TOTAL** | **$20.200** |
 
 ---
 
