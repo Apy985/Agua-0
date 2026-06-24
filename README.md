@@ -103,7 +103,7 @@ agua-0/
 
 ## Dashboard
 
-**URL:** https://agua-0.vercel.app/dashboard
+**URL:** https://agua-0.vercel.app/
 
 El dashboard muestra en tiempo real:
 - Humedad por sector con indicador de alerta
