@@ -33,7 +33,7 @@ En sectores urbanos de Santiago, las lluvias intensas generan acumulación de ag
 |---|---|---|
 | Microcontrolador sensor | ESP32-S3 Super Mini | 1 |
 | Gateway WiFi | ESP8266 MOD | 1 |
-| Sensor de nivel de agua | Analógico, salida 0-3.3V | 1 |
+| Sensor de nivel de agua | Sensor nivel de agua FZ0506 5-5V esp32 Arduino | 1 |
 | LED RGB | Cátodo común | 1 |
 | Batería | LiPo AHB623450 3.7V ~1200mAh | 1 |
 
