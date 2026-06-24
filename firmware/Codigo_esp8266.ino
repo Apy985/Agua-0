@@ -3,8 +3,8 @@
 #include <ESP8266HTTPClient.h>
 #include <WiFiClientSecureBearSSL.h>
 
-const char* ssid     = "Awita";
-const char* password = "jamoel10";
+const char* ssid     = "TU_RED_WIFI";
+const char* password = "TU_PASSWORD";
 
 const char* serverURL = "https://ippzliasjmyhiulqbsgf.supabase.co/rest/v1/lecturas";
 const char* apiKey    = "sb_publishable_4XfTiCH3K866tq1PtQ5eqg_WxK-L_fy";
