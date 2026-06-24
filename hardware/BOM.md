@@ -5,7 +5,7 @@
 |---|---|---|---|---|---|
 | 1 | Microcontrolador sensor | ESP32-S3 Super Mini, 16MB Flash, 8MB PSRAM | 1 | $8.500 | $8.500 |
 | 2 | Gateway WiFi | ESP8266 MOD, 802.11 b/g/n, 3.3V | 1 | $3.500 | $3.500 |
-| 3 | Sensor de nivel de agua | Analógico resistivo, salida 0–3.3V, pines S/+/- | 1 | $1.200 | $1.200 |
+| 3 | Sensor de nivel de agua | Sensor nivel de agua FZ0506 5-5V esp32 Arduino | 1 | $1.200 | $1.200 |
 | 4 | LED RGB | Cátodo común, 5mm, 20mA máx por canal | 1 | $200 | $200 |
 | 5 | Batería LiPo | AHB623450, 3.7V, ~1200mAh | 1 | $4.500 | $4.500 |
 | 6 | Resistencias | 220Ω (para LED RGB) | 3 | $20 | $60 |
