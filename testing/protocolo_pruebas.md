@@ -10,8 +10,8 @@ Validar que el sistema Agua-0 captura datos reales de nivel de agua, los transmi
 
 ## 2. Condiciones de prueba
 - **Lugar:** Laboratorio DEC, UAI
-- **Fecha:** 24-25 junio 2026
-- **Red WiFi:** Hotspot celular (2.4GHz)
+- **Fecha:** 24-25 junio 2026Abril - Junio 2026
+- ** Hotspot celular (2.4GHz)
 - **Hardware:** ESP32-S3 Super Mini + ESP8266 MOD + sensor de nivel de agua
 - **Software:** Arduino IDE 2.x, SDK ESP32 v3.3.8, SDK ESP8266 Community
 
