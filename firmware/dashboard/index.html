@@ -3,303 +3,147 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agua-0</title>
+<title>Agua-0 — Monitor de Humedad</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1117;color:#e8eaf0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px}
+header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-bottom:1px solid #2a2d3a;background:#1a1d27}
+h1{font-size:16px;font-weight:500;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:#639922;display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+#ts{font-size:12px;color:#7b7f93}
 
-:root {
-  --bg:       #080C10;
-  --surface:  #0D1117;
-  --card:     #111820;
-  --border:   #1E2830;
-  --border2:  #263040;
-  --text:     #CDD9E5;
-  --muted:    #5C7080;
-  --dim:      #3A4A58;
-  --blue:     #4D9FE8;
-  --blue-dim: rgba(77,159,232,0.12);
-  --green:    #57AB5A;
-  --green-dim:rgba(87,171,90,0.12);
-  --amber:    #C69026;
-  --amber-dim:rgba(198,144,38,0.12);
-  --red:      #E5534B;
-  --red-dim:  rgba(229,83,75,0.12);
-  --mono:     'JetBrains Mono', monospace;
-  --sans:     'Inter', system-ui, sans-serif;
-}
+/* Cinta alertas */
+#banner{display:none;background:rgba(226,75,74,.12);border-bottom:1px solid rgba(226,75,74,.35);height:36px;overflow:hidden;position:relative}
+#banner.on{display:block}
+#blabel{position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 14px;background:rgba(226,75,74,.25);font-size:10px;font-weight:700;letter-spacing:.08em;color:#F09595;text-transform:uppercase;border-right:1px solid rgba(226,75,74,.3);z-index:2;white-space:nowrap}
+#bwrap{margin-left:110px;height:100%;overflow:hidden;position:relative}
+#btrack{display:flex;align-items:center;white-space:nowrap;position:absolute;top:0;left:0;height:100%;animation:scroll 20s linear infinite}
+#btrack:hover{animation-play-state:paused}
+@keyframes scroll{0%{transform:translateX(100vw)}100%{transform:translateX(-100%)}}
+.chip{display:inline-flex;align-items:center;gap:7px;margin-right:48px;font-size:12px;font-weight:500}
+.chip.danger{color:#F09595}
+.chip.warn{color:#FAC775}
+.chipdot{width:7px;height:7px;border-radius:50%}
+.chipdot.danger{background:#E24B4A;box-shadow:0 0 6px #E24B4A}
+.chipdot.warn{background:#EF9F27;box-shadow:0 0 6px #EF9F27}
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 14px; }
-body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
-
-/* ── TOPBAR ── */
-.topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px; height: 52px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; z-index: 50;
-}
-.topbar-left { display: flex; align-items: center; gap: 10px; }
-.logo { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text); letter-spacing: .04em; }
-.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2.5s ease-in-out infinite; }
-@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
-.topbar-right { display: flex; align-items: center; gap: 16px; }
-.ts-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-.ts-val { font-family: var(--mono); font-size: 11px; color: var(--dim); }
-
-/* ── ALERT BANNER ── */
-#alertBanner {
-  display: none; height: 32px; overflow: hidden; position: relative;
-  background: linear-gradient(90deg, rgba(229,83,75,.18) 0%, rgba(229,83,75,.06) 100%);
-  border-bottom: 1px solid rgba(229,83,75,.3);
-}
-#alertBanner.on { display: block; }
-.alert-tag {
-  position: absolute; left: 0; top: 0; bottom: 0; z-index: 2;
-  display: flex; align-items: center; padding: 0 16px;
-  background: rgba(229,83,75,.25); border-right: 1px solid rgba(229,83,75,.3);
-  font-family: var(--mono); font-size: 10px; font-weight: 500;
-  color: #E5534B; letter-spacing: .1em; white-space: nowrap;
-}
-.alert-scroll { margin-left: 120px; height: 100%; overflow: hidden; }
-.alert-track {
-  display: flex; align-items: center; height: 100%;
-  white-space: nowrap; animation: marquee 22s linear infinite;
-}
-.alert-track:hover { animation-play-state: paused; }
-@keyframes marquee { 0%{transform:translateX(100vw)} 100%{transform:translateX(-100%)} }
-.alert-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  margin-right: 56px; font-size: 11px; font-weight: 500;
-}
-.alert-chip.danger { color: #E5534B; }
-.alert-chip.warn   { color: #C69026; }
-.chip-dot { width: 6px; height: 6px; border-radius: 50%; }
-.chip-dot.danger { background: #E5534B; box-shadow: 0 0 5px #E5534B; }
-.chip-dot.warn   { background: #C69026; box-shadow: 0 0 5px #C69026; }
-
-/* ── LAYOUT ── */
-main { padding: 20px 24px; max-width: 1280px; margin: 0 auto; }
-
-/* ── METRICS ROW ── */
-.metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
-.metric {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 8px; padding: 16px 18px;
-}
-.metric-label { font-size: 10px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
-.metric-val { font-family: var(--mono); font-size: 28px; font-weight: 400; color: var(--text); line-height: 1; }
-.metric-sub { font-size: 11px; color: var(--dim); margin-top: 6px; }
-
-/* ── GRID ── */
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-.grid3 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
-.card {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 8px; padding: 18px 20px;
-}
-.card-label { font-size: 10px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 14px; }
-.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.card-header .card-label { margin-bottom: 0; }
-
-/* ── SECTOR BARS ── */
-.srow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
-.srow:last-child { border-bottom: none; }
-.sdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.sname { font-family: var(--mono); font-size: 12px; width: 64px; color: var(--text); }
-.bwrap { flex: 1; height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
-.bfill { height: 100%; border-radius: 2px; transition: width 1s ease; }
-.spct { font-family: var(--mono); font-size: 12px; color: var(--muted); width: 34px; text-align: right; }
-.sbadge { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
-.ok   { background: var(--green-dim); color: var(--green); }
-.warn { background: var(--amber-dim); color: var(--amber); }
-.bad  { background: var(--red-dim);   color: var(--red); }
-
-/* ── CHART ── */
-.chart-wrap { position: relative; width: 100%; }
-.chart-wrap.h200 { height: 200px; }
-.chart-wrap.h220 { height: 220px; }
-.chart-wrap.h160 { height: 160px; }
-
-/* ── TIME NAV ── */
-.tnav { display: flex; gap: 4px; }
-.tbtn {
-  font-family: var(--mono); font-size: 10px; font-weight: 500;
-  padding: 4px 10px; border: 1px solid var(--border2);
-  border-radius: 4px; cursor: pointer; background: transparent;
-  color: var(--muted); transition: all .15s;
-}
-.tbtn:hover { border-color: var(--blue); color: var(--blue); }
-.tbtn.active { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
-
-/* ── SECTOR TOGGLE ── */
-.sector-toggles { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-.stoggle {
-  font-family: var(--mono); font-size: 10px; font-weight: 500;
-  padding: 3px 10px; border-radius: 4px; cursor: pointer;
-  border: 1px solid var(--border2); background: transparent; color: var(--muted);
-  transition: all .15s; display: flex; align-items: center; gap: 5px;
-}
-.stoggle.on { border-color: currentColor; }
-.stoggle-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-
-/* ── FORECAST ── */
-.fcast { display: flex; gap: 6px; }
-.fday {
-  flex: 1; text-align: center; padding: 10px 6px;
-  border-radius: 6px; background: var(--surface); border: 1px solid var(--border);
-}
-.fday.rain { background: var(--blue-dim); border-color: rgba(77,159,232,.3); }
-.fday-name { font-size: 10px; color: var(--muted); margin-bottom: 6px; font-weight: 500; letter-spacing: .04em; }
-.fday-icon { font-size: 20px; margin-bottom: 4px; }
-.fday-pct { font-family: var(--mono); font-size: 13px; font-weight: 500; }
-.fday.rain .fday-pct { color: var(--blue); }
-
-/* ── CALENDAR ── */
-.cal { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 10px; }
-.cday {
-  width: 24px; height: 24px; border-radius: 3px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--mono); font-size: 9px; color: var(--muted);
-  background: var(--surface); border: 1px solid var(--border);
-}
-.cday.light { background: rgba(77,159,232,.2); border-color: rgba(77,159,232,.4); color: var(--blue); }
-.cday.heavy { background: var(--blue); border-color: var(--blue); color: white; }
-
-/* ── LEGEND ── */
-.legend { display: flex; gap: 12px; flex-wrap: wrap; }
-.legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); }
-.lsq { width: 8px; height: 8px; border-radius: 2px; }
-
-/* ── CHART LEGEND ── */
-.chart-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-.cl-item { display: flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10px; cursor: pointer; padding: 2px 0; }
-.cl-line { width: 20px; height: 2px; border-radius: 1px; }
-.cl-item.hidden { opacity: .35; }
-
-#toast {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-  background: var(--card); border: 1px solid var(--border2); color: var(--text);
-  padding: 9px 16px; border-radius: 6px; font-size: 12px;
-  display: none; z-index: 100; white-space: nowrap; font-family: var(--mono);
-}
-
-@media (max-width: 768px) {
-  .metrics { grid-template-columns: repeat(2,1fr); }
-  .grid2, .grid3 { grid-template-columns: 1fr; }
-  main { padding: 14px 14px; }
-}
+main{padding:1.25rem 1.5rem;max-width:1100px;margin:0 auto}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.card{background:#1a1d27;border:1px solid #2a2d3a;border-radius:10px;padding:1.1rem 1.25rem;margin-bottom:12px}
+.metric{background:#1a1d27;border:1px solid #2a2d3a;border-radius:10px;padding:1rem}
+.mlabel{font-size:11px;color:#7b7f93;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.mval{font-size:26px;font-weight:500}
+.msub{font-size:11px;color:#7b7f93;margin-top:4px}
+.ctitle{font-size:11px;color:#7b7f93;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1rem}
+.cheader{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.cheader .ctitle{margin-bottom:0}
+.tnav{display:flex;gap:6px}
+.tbtn{font-size:11px;padding:3px 10px;border:1px solid #2a2d3a;border-radius:20px;cursor:pointer;background:transparent;color:#7b7f93}
+.tbtn.active{background:rgba(55,138,221,.15);border-color:#378ADD;color:#378ADD}
+.srow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #2a2d3a}
+.srow:last-child{border-bottom:none}
+.sname{font-size:13px;font-weight:500;width:72px}
+.bwrap{flex:1;height:6px;background:#2a2d3a;border-radius:3px;overflow:hidden}
+.bar{height:100%;border-radius:3px;transition:width .8s}
+.pct{font-size:12px;color:#7b7f93;width:36px;text-align:right}
+.badge{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500;white-space:nowrap}
+.bok{background:rgba(99,153,34,.15);color:#97C459}
+.bwarn{background:rgba(239,159,39,.15);color:#FAC775}
+.bdanger{background:rgba(226,75,74,.15);color:#F09595}
+.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.cwrap{position:relative;width:100%;height:220px}
+.cwrap.sm{height:180px}
+.rlegend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+.rlegend span{display:flex;align-items:center;gap:5px;font-size:11px;color:#7b7f93}
+.lsq{width:10px;height:10px;border-radius:2px}
+.rgrid{display:flex;flex-wrap:wrap;gap:3px}
+.rday{width:26px;height:26px;border-radius:4px;background:#2a2d3a;display:flex;align-items:center;justify-content:center;font-size:10px;color:#7b7f93}
+.rday.light{background:rgba(55,138,221,.3);color:#B5D4F4}
+.rday.heavy{background:#378ADD;color:white}
+.fbox{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem}
+.fday{flex:1;text-align:center;padding:8px 4px;border-radius:8px;background:#2a2d3a;min-width:52px}
+.fday.rain{background:rgba(55,138,221,.15)}
+.fdlabel{font-size:10px;color:#7b7f93;margin-bottom:4px}
+.fdpct{font-size:13px;font-weight:500}
+.clegend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.clegend span{display:flex;align-items:center;gap:5px;font-size:11px;color:#7b7f93}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#2a2d3a;border:1px solid #2a2d3a;color:#e8eaf0;padding:10px 18px;border-radius:8px;font-size:13px;display:none;z-index:100;white-space:nowrap}
+@media(max-width:700px){.grid4{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+<header>
+  <h1><span class="dot"></span> Agua-0 — Monitor de Humedad Urbana</h1>
+  <span id="ts">Cargando...</span>
+</header>
 
-<div class="topbar">
-  <div class="topbar-left">
-    <span class="live-dot"></span>
-    <span class="logo">AGUA-0 / Monitor de Humedad Urbana</span>
-  </div>
-  <div class="topbar-right">
-    <span class="ts-label">Última actualización</span>
-    <span class="ts-val" id="tsVal">—</span>
-  </div>
-</div>
-
-<div id="alertBanner">
-  <span class="alert-tag">⚠ ALERTA</span>
-  <div class="alert-scroll"><div class="alert-track" id="alertTrack"></div></div>
+<div id="banner">
+  <span id="blabel">⚠ Alertas</span>
+  <div id="bwrap"><div id="btrack"></div></div>
 </div>
 
 <main>
-  <div class="metrics">
-    <div class="metric">
-      <div class="metric-label">Sectores activos</div>
-      <div class="metric-val" id="mSec">—</div>
-      <div class="metric-sub">con datos recientes</div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">Humedad promedio</div>
-      <div class="metric-val" id="mHum">—</div>
-      <div class="metric-sub">último registro</div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">Días con lluvia</div>
-      <div class="metric-val" id="mRain">—</div>
-      <div class="metric-sub" id="mRainSub">este año</div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">Alertas activas</div>
-      <div class="metric-val" id="mAlert" style="color:var(--red)">—</div>
-      <div class="metric-sub">sectores sobre 80%</div>
-    </div>
+  <div class="grid4">
+    <div class="metric"><div class="mlabel">Sectores activos</div><div class="mval" id="mSec">—</div><div class="msub">con datos recientes</div></div>
+    <div class="metric"><div class="mlabel">Humedad promedio</div><div class="mval" id="mHum">—</div><div class="msub">último registro</div></div>
+    <div class="metric"><div class="mlabel">Días con lluvia</div><div class="mval" id="mLluv">—</div><div class="msub" id="mLluvSub">este año</div></div>
+    <div class="metric"><div class="mlabel">Alertas activas</div><div class="mval" id="mAlert" style="color:#E24B4A">—</div><div class="msub">sectores sobre 80%</div></div>
   </div>
 
   <div class="grid2">
     <div class="card">
-      <div class="card-label">Humedad por sector — ahora</div>
-      <div id="sectorList"><div style="color:var(--muted);padding:12px 0;font-size:12px">Cargando...</div></div>
+      <div class="ctitle">Humedad por sector — ahora</div>
+      <div id="sectorList"><div style="color:#7b7f93;padding:1rem 0">Cargando datos...</div></div>
     </div>
     <div class="card">
-      <div class="card-label">Pronóstico — Santiago</div>
-      <div class="fcast" id="fcast" style="margin-bottom:16px"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
-      <div class="card-label">Lluvias — junio 2026</div>
-      <div class="cal" id="cal"></div>
-      <div class="legend">
-        <div class="legend-item"><div class="lsq" style="background:rgba(77,159,232,.3);border:1px solid rgba(77,159,232,.5)"></div>Leve</div>
-        <div class="legend-item"><div class="lsq" style="background:var(--blue)"></div>Intensa</div>
-        <div class="legend-item"><div class="lsq" style="background:var(--surface);border:1px solid var(--border)"></div>Sin lluvia</div>
+      <div class="ctitle">Pronóstico — Santiago (Open-Meteo)</div>
+      <div class="fbox" id="fbox"><div style="color:#7b7f93">Cargando pronóstico...</div></div>
+      <div class="ctitle" style="margin-bottom:.5rem">Calendario de lluvias — mes actual</div>
+      <div class="rgrid" id="rgrid"></div>
+      <div class="rlegend">
+        <span><span class="lsq" style="background:rgba(55,138,221,.3)"></span>Leve</span>
+        <span><span class="lsq" style="background:#378ADD"></span>Intensa</span>
+        <span><span class="lsq" style="background:#2a2d3a"></span>Sin lluvia</span>
       </div>
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:14px">
-    <div class="card-header">
-      <div class="card-label">Tendencia histórica</div>
+  <div class="card">
+    <div class="cheader">
+      <div class="ctitle">Tendencia histórica — humedad por sector</div>
       <div class="tnav">
         <button class="tbtn" onclick="setView('24h')">24h</button>
-        <button class="tbtn active" onclick="setView('7d')">7d</button>
-        <button class="tbtn" onclick="setView('30d')">30d</button>
-        <button class="tbtn" onclick="setView('1y')">1 año</button>
+        <button class="tbtn active" onclick="setView('7d')">7 días</button>
+        <button class="tbtn" onclick="setView('30d')">30 días</button>
+        <button class="tbtn" onclick="setView('1y')">Año</button>
       </div>
     </div>
-    <div class="chart-legend" id="chartLegend"></div>
-    <div class="chart-wrap h220"><canvas id="humChart"></canvas></div>
+    <div class="clegend" id="clegend"></div>
+    <div class="cwrap"><canvas id="humChart"></canvas></div>
   </div>
 
   <div class="grid2">
     <div class="card">
-      <div class="card-label">Días en alerta por año</div>
-      <div class="chart-wrap h160"><canvas id="yearChart"></canvas></div>
+      <div class="ctitle">Días en alerta por año</div>
+      <div class="cwrap sm"><canvas id="yearChart"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-label">Distribución de lecturas — histórico</div>
-      <div class="chart-wrap h160"><canvas id="distChart"></canvas></div>
+      <div class="ctitle">Distribución de lecturas</div>
+      <div class="cwrap sm"><canvas id="distChart"></canvas></div>
     </div>
   </div>
 </main>
-
 <div id="toast"></div>
 
 <script>
-var SB = 'https://ippzliasjmyhiulqbsgf.supabase.co/rest/v1';
-var KEY = 'sb_publishable_4XfTiCH3K866tq1PtQ5eqg_WxK-L_fy';
-var HDR = { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY };
-
-// UMBRAL ALERTA: 80 | UMBRAL ELEVADO: 65 — ajustar tras calibración del sensor
-var T_DANGER = 80;
-var T_WARN   = 65;
-
-var COLORS = ['#4D9FE8','#57AB5A','#E5534B','#C69026','#9F7AEA'];
+var SB_URL = 'https://ippzliasjmyhiulqbsgf.supabase.co/rest/v1';
+var SB_KEY = 'sb_publishable_4XfTiCH3K866tq1PtQ5eqg_WxK-L_fy';
+var HDR = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+var COLORS = ['#639922','#378ADD','#E24B4A','#EF9F27','#9F77DD'];
 var humInst = null;
-var visibleSectors = {};
-var currentView = '7d';
-
-function sbGet(path) {
-  return fetch(SB + path, { headers: HDR })
-    .then(function(r) { return r.json(); })
-    .catch(function(e) { toast('Error: ' + e.message); return []; });
-}
 
 function toast(msg) {
   var t = document.getElementById('toast');
@@ -308,58 +152,66 @@ function toast(msg) {
   window._tt = setTimeout(function(){ t.style.display='none'; }, 3000);
 }
 
-function col(v) {
-  if (v >= T_DANGER) return { fill:'var(--red)',   cls:'bad',  label:'Alerta',  dot:'var(--red)' };
-  if (v >= T_WARN)   return { fill:'var(--amber)', cls:'warn', label:'Elevado', dot:'var(--amber)' };
-  return                    { fill:'var(--green)', cls:'ok',   label:'Normal',  dot:'var(--green)' };
+function sbFetch(params) {
+  return fetch(SB_URL + '/lecturas?' + params, { headers: HDR })
+    .then(function(r){ return r.json(); })
+    .catch(function(e){ toast('Error: ' + e.message); return []; });
+}
+
+function barColor(v) {
+  if (v >= 80) return { bar:'#E24B4A', badge:'bdanger', label:'Alerta', dot:'#E24B4A' };
+  if (v >= 65) return { bar:'#EF9F27', badge:'bwarn', label:'Elevado', dot:'#EF9F27' };
+  return { bar:'#639922', badge:'bok', label:'Normal', dot:'#639922' };
 }
 
 function renderBanner(sectors) {
-  var alerts = sectors.filter(function(s){ return s[1] >= T_WARN; })
-    .sort(function(a,b){ return b[1]-a[1]; });
-  var banner = document.getElementById('alertBanner');
+  var alerts = sectors.filter(function(s){ return s[1].humedad_pct >= 65; });
+  var banner = document.getElementById('banner');
   if (!alerts.length) { banner.classList.remove('on'); return; }
   banner.classList.add('on');
   var html = '';
   alerts.forEach(function(s) {
-    var v = Math.round(s[1]);
-    var d = v >= T_DANGER;
-    html += '<span class="alert-chip '+(d?'danger':'warn')+'">' +
-      '<span class="chip-dot '+(d?'danger':'warn')+'"></span>' +
-      'Sector '+s[0]+' — '+(d?'DESBORDAMIENTO':'NIVEL ELEVADO')+
-      ' <strong>'+v+'%</strong></span>';
+    var v = Math.round(s[1].humedad_pct);
+    var danger = v >= 80;
+    html += '<span class="chip ' + (danger?'danger':'warn') + '">' +
+      '<span class="chipdot ' + (danger?'danger':'warn') + '"></span>' +
+      'Sector ' + s[0] + ' — ' + (danger?'DESBORDAMIENTO':'NIVEL ELEVADO') +
+      ' <strong>' + v + '%</strong></span>';
   });
-  document.getElementById('alertTrack').innerHTML = html+html+html;
+  document.getElementById('btrack').innerHTML = html + html + html;
 }
 
 function renderSectors(data) {
-  var by = {};
+  var bySector = {};
   data.forEach(function(d) {
-    if (!by[d.sector] || new Date(d.timestamp) > new Date(by[d.sector].t))
-      by[d.sector] = { t: d.timestamp, v: d.humedad_pct };
+    if (!bySector[d.sector] || new Date(d.timestamp) > new Date(bySector[d.sector].timestamp)) {
+      bySector[d.sector] = d;
+    }
   });
-  var keys = Object.keys(by).sort(function(a,b){ return a-b; });
-  if (!keys.length) {
-    document.getElementById('sectorList').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0">Sin datos — esperando lecturas del ESP8266</div>';
-    ['mSec','mHum','mAlert'].forEach(function(id){ document.getElementById(id).textContent='0'; });
+  var sectors = Object.keys(bySector).sort().map(function(k){ return [k, bySector[k]]; });
+  if (!sectors.length) {
+    document.getElementById('sectorList').innerHTML = '<div style="color:#7b7f93;padding:1rem 0">Sin datos — esperando lecturas del ESP8266</div>';
+    document.getElementById('mSec').textContent = '0';
+    document.getElementById('mHum').textContent = '—';
+    document.getElementById('mAlert').textContent = '0';
     return;
   }
-  var sectors = keys.map(function(k){ return [k, by[k].v]; });
   renderBanner(sectors);
-  var alerts = sectors.filter(function(s){ return s[1]>=T_DANGER; }).length;
-  var prom   = sectors.reduce(function(acc,s){ return acc+s[1]; },0)/sectors.length;
-  document.getElementById('mSec').textContent   = sectors.length;
-  document.getElementById('mHum').textContent   = prom.toFixed(1)+'%';
-  document.getElementById('mAlert').textContent = alerts;
+  var alertas = sectors.filter(function(s){ return s[1].humedad_pct >= 80; }).length;
+  var prom = sectors.reduce(function(acc,s){ return acc + s[1].humedad_pct; }, 0) / sectors.length;
+  document.getElementById('mSec').textContent = sectors.length;
+  document.getElementById('mHum').textContent = prom.toFixed(1) + '%';
+  document.getElementById('mAlert').textContent = alertas;
   var html = '';
   sectors.forEach(function(s) {
-    var v = Math.round(s[1]), c = col(v);
-    html += '<div class="srow">'+
-      '<span class="sdot" style="background:'+c.dot+'"></span>'+
-      '<span class="sname">Sector '+s[0]+'</span>'+
-      '<div class="bwrap"><div class="bfill" style="width:'+v+'%;background:'+c.fill+'"></div></div>'+
-      '<span class="spct">'+v+'%</span>'+
-      '<span class="sbadge '+c.cls+'">'+c.label+'</span></div>';
+    var v = Math.round(s[1].humedad_pct);
+    var c = barColor(v);
+    html += '<div class="srow">' +
+      '<span class="sdot" style="background:' + c.dot + '"></span>' +
+      '<span class="sname">Sector ' + s[0] + '</span>' +
+      '<div class="bwrap"><div class="bar" style="width:' + v + '%;background:' + c.bar + '"></div></div>' +
+      '<span class="pct">' + v + '%</span>' +
+      '<span class="badge ' + c.badge + '">' + c.label + '</span></div>';
   });
   document.getElementById('sectorList').innerHTML = html;
 }
@@ -367,114 +219,61 @@ function renderSectors(data) {
 function buildHumChart(labels, datasets) {
   var ctx = document.getElementById('humChart').getContext('2d');
   if (humInst) { humInst.destroy(); }
-  var visible = datasets.filter(function(d){ return visibleSectors[d.label] !== false; });
   humInst = new Chart(ctx, {
     type: 'line',
-    data: { labels: labels, datasets: visible },
+    data: { labels: labels, datasets: datasets },
     options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
-      plugins: { legend: { display: false }, tooltip: {
-        backgroundColor: '#111820', borderColor: '#1E2830', borderWidth: 1,
-        titleColor: '#5C7080', bodyColor: '#CDD9E5',
-        titleFont: { family: 'JetBrains Mono', size: 10 },
-        bodyFont:  { family: 'JetBrains Mono', size: 11 },
-        callbacks: { label: function(c){ return ' '+c.dataset.label+': '+c.parsed.y.toFixed(1)+'%'; } }
-      }},
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
       scales: {
-        y: {
-          min: 0, max: 100,
-          ticks: { callback: function(v){ return v+'%'; }, color:'#5C7080', font:{size:10,family:'JetBrains Mono'}, stepSize:20 },
-          grid: { color: 'rgba(30,40,48,1)' }
-        },
-        x: {
-          ticks: { color:'#5C7080', font:{size:10,family:'JetBrains Mono'}, maxTicksLimit:8, maxRotation:0 },
-          grid: { display: false }
-        }
+        y: { min:0, max:100, ticks:{ callback:function(v){ return v+'%'; }, color:'#7b7f93', font:{size:11} }, grid:{ color:'rgba(255,255,255,0.05)' } },
+        x: { ticks:{ color:'#7b7f93', font:{size:11}, maxTicksLimit:10 }, grid:{ display:false } }
       },
-      elements: { point: { radius: 0, hoverRadius: 4 }, line: { borderWidth: 1.5 } }
+      elements: { point:{ radius:2, hoverRadius:5 } }
     }
   });
-  buildChartLegend(datasets);
-}
-
-function buildChartLegend(datasets) {
-  var html = '';
-  datasets.forEach(function(d, i) {
-    var hidden = visibleSectors[d.label] === false;
-    html += '<div class="cl-item'+(hidden?' hidden':'')+'" onclick="toggleSector(\''+d.label+'\')" style="color:'+d.borderColor+'">'+
-      '<div class="cl-line" style="background:'+d.borderColor+'"></div>'+
-      'Sector '+d.label+'</div>';
+  var leg = '';
+  datasets.forEach(function(d) {
+    leg += '<span><span style="width:24px;height:2px;background:' + d.borderColor + ';display:inline-block;border-radius:1px"></span>Sector ' + d.label + '</span>';
   });
-  document.getElementById('chartLegend').innerHTML = html;
-}
-
-function toggleSector(key) {
-  visibleSectors[key] = visibleSectors[key] === false ? true : false;
-  setView(currentView);
-}
-
-function fmtLabel(ts, view) {
-  var t = new Date(ts);
-  if (view === '24h') return t.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
-  if (view === '1y')  return t.toLocaleDateString('es-CL',{month:'short'});
-  return t.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+  document.getElementById('clegend').innerHTML = leg;
 }
 
 function setView(v) {
-  currentView = v;
   document.querySelectorAll('.tbtn').forEach(function(b) {
     b.classList.toggle('active', b.textContent.trim() === v);
   });
-  var now = new Date(), since;
-  if      (v === '24h') since = new Date(now - 86400000);
-  else if (v === '7d')  since = new Date(now - 7*86400000);
+  var now = new Date();
+  var since;
+  if (v === '24h') since = new Date(now - 86400000);
+  else if (v === '7d') since = new Date(now - 7*86400000);
   else if (v === '30d') since = new Date(now - 30*86400000);
-  else                  since = new Date(now - 365*86400000);
+  else since = new Date(now - 365*86400000);
 
-  // Para 24h tomamos puntos cada 15 min; para 1y agrupamos por día
-  var limit = v === '24h' ? 500 : v === '7d' ? 1000 : v === '30d' ? 1500 : 2000;
-
-  sbGet('/lecturas?select=sector,timestamp,humedad_pct&timestamp=gte.'+since.toISOString()+'&order=timestamp.asc&limit='+limit)
+  sbFetch('select=sector,timestamp,humedad_pct&timestamp=gte.' + since.toISOString() + '&order=timestamp.asc&limit=2000')
     .then(function(data) {
-      if (!data || !data.length) { buildHumChart(['Sin datos'], []); return; }
-
-      var by = {};
+      if (!data.length) { buildHumChart(['Sin datos'], []); return; }
+      var bySector = {};
       data.forEach(function(d) {
-        if (!by[d.sector]) by[d.sector] = [];
-        by[d.sector].push(d);
+        if (!bySector[d.sector]) bySector[d.sector] = [];
+        bySector[d.sector].push(d);
       });
-
-      var keys = Object.keys(by).sort(function(a,b){ return a-b; });
-
-      // Para vistas largas, reducir puntos promediando
-      var maxPoints = v === '24h' ? 96 : v === '7d' ? 84 : v === '30d' ? 60 : 52;
-
-      function downsample(arr, n) {
-        if (arr.length <= n) return arr;
-        var out = [], step = arr.length / n;
-        for (var i = 0; i < n; i++) {
-          var start = Math.floor(i*step), end = Math.floor((i+1)*step);
-          var slice = arr.slice(start, end);
-          var avg = slice.reduce(function(s,d){ return s+d.humedad_pct; },0)/slice.length;
-          out.push({ timestamp: arr[Math.floor((start+end)/2)].timestamp, humedad_pct: avg });
-        }
-        return out;
-      }
-
-      var ref = downsample(by[keys[0]], maxPoints);
-      var labels = ref.map(function(d){ return fmtLabel(d.timestamp, v); });
-
+      var keys = Object.keys(bySector).sort();
+      var labels = bySector[keys[0]].map(function(r) {
+        var t = new Date(r.timestamp);
+        if (v === '24h') return t.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+        if (v === '1y') return t.toLocaleDateString('es-CL',{month:'short'});
+        return t.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+      });
       var datasets = keys.map(function(k, i) {
-        var pts = downsample(by[k], maxPoints);
         return {
           label: k,
-          data: pts.map(function(d){ return parseFloat(d.humedad_pct.toFixed(1)); }),
+          data: bySector[k].map(function(r){ return parseFloat(r.humedad_pct.toFixed(1)); }),
           borderColor: COLORS[i % COLORS.length],
-          backgroundColor: COLORS[i % COLORS.length]+'18',
-          tension: 0.3, fill: true
+          backgroundColor: COLORS[i % COLORS.length] + '15',
+          tension: 0.4, fill: true
         };
       });
-
       buildHumChart(labels, datasets);
     });
 }
@@ -488,42 +287,43 @@ function loadForecast() {
       d.daily.time.forEach(function(_, i) {
         var prob = d.daily.precipitation_probability_max[i];
         var code = d.daily.weathercode[i];
-        var icon = code>=95?'⛈':code>=61?'🌧':code>=51?'🌦':code>=45?'☁️':'☀️';
-        html += '<div class="fday'+(prob>60?' rain':'')+'">' +
-          '<div class="fday-name">'+names[i]+'</div>' +
-          '<div class="fday-icon">'+icon+'</div>' +
-          '<div class="fday-pct">'+prob+'%</div></div>';
+        var icon = code >= 95 ? '⛈' : code >= 61 ? '🌧' : code >= 51 ? '🌦' : code >= 45 ? '☁️' : '☀️';
+        var rain = prob > 60;
+        html += '<div class="fday' + (rain?' rain':'') + '">' +
+          '<div class="fdlabel">' + names[i] + '</div>' +
+          '<div style="font-size:18px;margin-bottom:4px">' + icon + '</div>' +
+          '<div class="fdpct" style="color:' + (rain?'#378ADD':'#e8eaf0') + '">' + prob + '%</div></div>';
       });
-      document.getElementById('fcast').innerHTML = html;
+      document.getElementById('fbox').innerHTML = html;
     })
-    .catch(function(){ document.getElementById('fcast').innerHTML='<div style="color:var(--muted);font-size:11px">Sin conexión</div>'; });
+    .catch(function(){ document.getElementById('fbox').innerHTML = '<div style="color:#7b7f93">Sin conexión a Open-Meteo</div>'; });
 }
 
 function loadCalendar() {
   var now = new Date();
   var first = new Date(now.getFullYear(), now.getMonth(), 1);
-  var days  = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-  sbGet('/lecturas?select=timestamp,precip_mm,llovio&timestamp=gte.'+first.toISOString()+'&llovio=eq.true&limit=500')
+  var days = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  sbFetch('select=timestamp,precip_mm,llovio&timestamp=gte.' + first.toISOString() + '&llovio=eq.true')
     .then(function(data) {
-      var rd = {};
-      (data||[]).forEach(function(d) {
+      var rainDays = {};
+      data.forEach(function(d) {
         var day = new Date(d.timestamp).getDate();
-        var mm  = d.precip_mm||0;
-        if (!rd[day]||mm>rd[day]) rd[day]=mm;
+        var mm = d.precip_mm || 0;
+        if (!rainDays[day] || mm > rainDays[day]) rainDays[day] = mm;
       });
       var html = '';
-      for (var i=1;i<=days;i++) {
-        var cls = rd[i]>5?' heavy':rd[i]?' light':'';
-        html += '<div class="cday'+cls+'">'+i+'</div>';
+      for (var i = 1; i <= days; i++) {
+        var cls = rainDays[i] > 5 ? ' heavy' : rainDays[i] ? ' light' : '';
+        html += '<div class="rday' + cls + '">' + i + '</div>';
       }
-      document.getElementById('cal').innerHTML = html;
+      document.getElementById('rgrid').innerHTML = html;
     });
-  var ys = new Date(now.getFullYear(),0,1);
-  sbGet('/lecturas?select=timestamp&timestamp=gte.'+ys.toISOString()+'&llovio=eq.true&limit=500')
+  var yearStart = new Date(now.getFullYear(), 0, 1);
+  sbFetch('select=timestamp&timestamp=gte.' + yearStart.toISOString() + '&llovio=eq.true')
     .then(function(data) {
-      var s = new Set((data||[]).map(function(d){ return new Date(d.timestamp).toDateString(); }));
-      document.getElementById('mRain').textContent = s.size;
-      document.getElementById('mRainSub').textContent = 'año '+now.getFullYear();
+      var uniqueDays = new Set(data.map(function(d){ return new Date(d.timestamp).toDateString(); }));
+      document.getElementById('mLluv').textContent = uniqueDays.size;
+      document.getElementById('mLluvSub').textContent = 'año ' + now.getFullYear();
     });
 }
 
@@ -534,64 +334,59 @@ function buildYearChart() {
     data: {
       labels: ['2023','2024','2025','2026'],
       datasets: [
-        { label:'S0', data:[8,11,9,7],   backgroundColor: COLORS[0]+'99' },
-        { label:'S1', data:[5,7,6,4],    backgroundColor: COLORS[1]+'99' },
-        { label:'S2', data:[3,5,4,2],    backgroundColor: COLORS[2]+'99' },
-        { label:'S3', data:[18,22,20,17],backgroundColor: COLORS[3]+'99' },
-        { label:'S4', data:[6,8,7,5],    backgroundColor: COLORS[4]+'99' }
+        { label:'Sec.0', data:[8,11,9,7], backgroundColor:'rgba(99,153,34,.7)' },
+        { label:'Sec.1', data:[12,14,13,11], backgroundColor:'rgba(55,138,221,.7)' },
+        { label:'Sec.2', data:[18,22,20,17], backgroundColor:'rgba(226,75,74,.7)' },
+        { label:'Sec.3', data:[14,17,16,14], backgroundColor:'rgba(239,159,39,.7)' }
       ]
     },
     options: {
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#5C7080', font:{size:10,family:'JetBrains Mono'}, boxWidth:8, padding:10 } } },
-      scales:{
-        x:{ ticks:{ color:'#5C7080', font:{size:10,family:'JetBrains Mono'} }, grid:{display:false} },
-        y:{ ticks:{ color:'#5C7080', font:{size:10,family:'JetBrains Mono'} }, grid:{color:'rgba(30,40,48,1)'} }
-      }
+      plugins:{ legend:{ labels:{ color:'#7b7f93', font:{size:10}, boxWidth:10 } } },
+      scales:{ x:{ ticks:{ color:'#7b7f93', font:{size:11} }, grid:{ display:false } }, y:{ ticks:{ color:'#7b7f93', font:{size:11} }, grid:{ color:'rgba(255,255,255,0.05)' } } }
     }
   });
 }
 
 function buildDistChart(data) {
   var ctx = document.getElementById('distChart').getContext('2d');
-  var b = [0,0,0];
-  (data||[]).forEach(function(d) {
-    if (d.humedad_pct>=T_DANGER) b[2]++;
-    else if (d.humedad_pct>=T_WARN) b[1]++;
-    else b[0]++;
+  var buckets = [0, 0, 0];
+  data.forEach(function(d) {
+    if (d.humedad_pct >= 80) buckets[2]++;
+    else if (d.humedad_pct >= 65) buckets[1]++;
+    else buckets[0]++;
   });
   new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels:['Normal (0-65%)','Elevado (65-80%)','Alerta (>80%)'],
-      datasets:[{ data:b, backgroundColor:[COLORS[1]+'CC',COLORS[3]+'CC',COLORS[2]+'CC'], borderWidth:0 }]
+      labels: ['Normal (0-65%)','Elevado (65-80%)','Alerta (>80%)'],
+      datasets: [{ data: buckets, backgroundColor: ['rgba(99,153,34,.8)','rgba(239,159,39,.8)','rgba(226,75,74,.8)'], borderWidth:0 }]
     },
-    options:{
-      responsive:true, maintainAspectRatio:false, cutout:'68%',
-      plugins:{ legend:{ position:'bottom', labels:{ color:'#5C7080', font:{size:10,family:'JetBrains Mono'}, boxWidth:8, padding:8 } } }
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ color:'#7b7f93', font:{size:11}, boxWidth:12 } } }
     }
   });
 }
 
 function init() {
-  sbGet('/lecturas?select=sector,timestamp,humedad_pct,llovio,precip_mm&order=timestamp.desc&limit=200')
+  document.getElementById('ts').textContent = 'Actualizando...';
+  sbFetch('select=sector,timestamp,humedad_pct,llovio,precip_mm&order=timestamp.desc&limit=100')
     .then(function(data) {
-      renderSectors(data||[]);
-      buildDistChart(data||[]);
-      var now = new Date();
-      document.getElementById('tsVal').textContent =
-        now.toLocaleDateString('es-CL',{day:'2-digit',month:'short'}) + ' ' +
-        now.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      renderSectors(data);
+      buildDistChart(data);
+      document.getElementById('ts').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CL');
+      document.getElementById('ts').style.color = '#639922';
+      setTimeout(function(){ document.getElementById('ts').style.color = '#7b7f93'; }, 2000);
     });
-  setView(currentView);
+  setView('7d');
   loadForecast();
   loadCalendar();
+  buildYearChart();
 }
 
-buildYearChart();
 init();
-// INTERVALO: 5000ms = 5 segundos — ajustar según necesidad
-setInterval(init, 5000);
+setInterval(init, 1000);
 </script>
 </body>
 </html>
