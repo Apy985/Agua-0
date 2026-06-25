@@ -54,6 +54,9 @@ agua-0/
 │   ├── esquematico.png             # Diagrama de conexiones (Wokwi)
 │   ├── BOM.md                      # Lista de materiales con costos
 │   └── fotos/                      # Fotografías del prototipo
+├       ├── imagen prototipo 1.jpg         imagen prototipo 1.jpg                
+│       ├── imagen prototipo 2.jpg                     
+│       └── imagen prototipo 3.jpg     
 ├── diseño-3d/
 │   ├── encapsulado.f3d             # Modelo Fusion 360
 │   ├── planos.pdf                  # Planos técnicos con cotas
