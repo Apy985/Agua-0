@@ -110,7 +110,7 @@ void loop() {
     Serial.println("ESP-NOW: Error al enviar - codigo: " + String(resultado));
   }
 
-  delay(500);
+  delay(10000);
 }
 
 void encenderColor(int r, int g, int b) {
