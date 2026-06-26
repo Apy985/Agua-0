@@ -11,16 +11,19 @@
    5. Si deja de recibir anuncios por un tiempo (el 8266 se reinició,
       o el router cambió de canal), vuelve a escanear automáticamente.
    6. Controla un LED RGB según el nivel de humedad.
+   7. Si recibe una orden de deep sleep del ESP8266 (probabilidad de
+      lluvia < 60%), entra en deep sleep por 12 horas para ahorrar batería.
 
   IMPORTANTE: este código y el del ESP8266 forman un par. El protocolo
-  de mensajes (MSG_ANUNCIO_CANAL / MSG_LECTURA) debe coincidir EXACTO
-  entre ambos archivos.
+  de mensajes (MSG_ANUNCIO_CANAL / MSG_LECTURA / MSG_ORDEN_SLEEP) debe
+  coincidir EXACTO entre ambos archivos.
   ============================================================
 */
 
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include <esp_sleep.h>
 
 // ============================================================
 // CONFIGURACIÓN DE PINES
@@ -39,13 +42,17 @@ const int umbralIntermedio = 1000;
 // ============================================================
 // TIEMPOS
 // ============================================================
-const unsigned long intervaloEnvio = 500;       // lectura+envío cada 0.5s
-const unsigned long delayLED = 3000;            // min. entre cambios de color
-const unsigned long timeoutSinAnuncio = 15000;  // 15s sin novedades del 8266 -> re-escanear
-const unsigned long tiempoPorCanalEscaneo = 400; // ms de espera en cada canal al escanear
+const unsigned long intervaloEnvio       = 500;    // lectura+envío cada 0.5s
+const unsigned long delayLED             = 3000;   // min. entre cambios de color
+const unsigned long timeoutSinAnuncio    = 15000;  // 15s sin novedades -> re-escanear
+const unsigned long tiempoPorCanalEscaneo = 400;   // ms de espera por canal al escanear
 
-unsigned long ultimoEnvio = 0;
-unsigned long ultimoCambioLED = 0;
+// Deep sleep de 12 horas cuando no hay lluvia esperada
+// (12 * 60 * 60 * 1000000 microsegundos)
+#define DEEP_SLEEP_US  (12ULL * 60 * 60 * 1000000)
+
+unsigned long ultimoEnvio           = 0;
+unsigned long ultimoCambioLED       = 0;
 unsigned long ultimoAnuncioRecibido = 0;
 
 String nivelAnterior = "";
@@ -54,8 +61,9 @@ String nivelAnterior = "";
 // PROTOCOLO INTERNO (debe coincidir EXACTO con el del 8266)
 // ============================================================
 typedef enum : uint8_t {
-  MSG_ANUNCIO_CANAL = 0xA1,
-  MSG_LECTURA       = 0xA2
+  MSG_ANUNCIO_CANAL = 0xA1,  // 8266 -> 32-S3 : "este es mi canal"
+  MSG_LECTURA       = 0xA2,  // 32-S3 -> 8266 : datos de sensor
+  MSG_ORDEN_SLEEP   = 0xA3   // 8266 -> 32-S3 : "entra en deep sleep"
 } TipoMensaje;
 
 typedef struct __attribute__((packed)) {
@@ -69,19 +77,24 @@ typedef struct __attribute__((packed)) {
   char nivel[12];
 } PaqueteLectura;
 
+typedef struct __attribute__((packed)) {
+  uint8_t tipo;            // = MSG_ORDEN_SLEEP
+  uint32_t duracion_seg;   // duración del sleep en segundos (info para logs)
+} PaqueteOrdenSleep;
+
 uint8_t macBroadcast[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-// MAC del ESP8266 receptor. Cámbiala si tu placa tiene otra.
+// MAC del ESP8266 receptor. Reemplazar con la MAC real de tu placa.
 uint8_t macESP8266[] = {0xBC, 0xDD, 0xC2, 0x7A, 0x3B, 0x97};
 
 // ============================================================
 // ESTADO DE SINCRONIZACIÓN DE CANAL
 // ============================================================
-bool sincronizado = false;
-int canalActual = 1;
-int canalEscaneoActual = 1;
-unsigned long ultimoSaltoEscaneo = 0;
-bool peerReceptorRegistrado = false;
+bool sincronizado       = false;
+int  canalActual        = 1;
+int  canalEscaneoActual = 1;
+unsigned long ultimoSaltoEscaneo  = 0;
+bool peerReceptorRegistrado       = false;
 
 // ============================================================
 // LED RGB
@@ -92,24 +105,22 @@ void encenderColor(int r, int g, int b) {
   analogWrite(pinB, b);
 }
 
-void apagarLED() {
-  encenderColor(0, 0, 0);
-}
+void apagarLED() { encenderColor(0, 0, 0); }
 
 // ============================================================
-// Declaraciones adelantadas (orden de funciones)
+// Declaraciones adelantadas
 // ============================================================
 void fijarCanal(int canal);
 void registrarPeerReceptor();
 void avanzarEscaneo();
 void leerYenviar(unsigned long ahora);
+void entrarDeepSleep(uint32_t seg);
 
 // ============================================================
 // ESP-NOW: callbacks
 // ============================================================
 void onDataSent(const wifi_tx_info_t *mac_addr, esp_now_send_status_t status) {
-  // Diagnóstico opcional; no es crítico para la lógica.
-  // Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Envío OK" : "Envío fallido");
+  // Diagnóstico opcional
 }
 
 void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
@@ -119,16 +130,24 @@ void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incomingData, in
   if (tipo == MSG_ANUNCIO_CANAL && len == (int)sizeof(PaqueteAnuncioCanal)) {
     PaqueteAnuncioCanal pkt;
     memcpy(&pkt, incomingData, sizeof(pkt));
-
     ultimoAnuncioRecibido = millis();
 
     if (!sincronizado || pkt.canal != canalActual) {
-      Serial.print("Anuncio de canal recibido del 8266. Canal indicado: ");
+      Serial.print("[Canal] Anuncio recibido. Canal: ");
       Serial.println(pkt.canal);
       fijarCanal(pkt.canal);
       registrarPeerReceptor();
       sincronizado = true;
     }
+  }
+
+  // ── NUEVO: orden de deep sleep enviada por el ESP8266 ──
+  // El 8266 la manda si Open-Meteo indica < 60% de probabilidad de lluvia.
+  if (tipo == MSG_ORDEN_SLEEP && len == (int)sizeof(PaqueteOrdenSleep)) {
+    PaqueteOrdenSleep pkt;
+    memcpy(&pkt, incomingData, sizeof(pkt));
+    entrarDeepSleep(pkt.duracion_seg);
+    // entrarDeepSleep() no retorna; el ESP32 se apaga.
   }
 }
 
@@ -148,36 +167,54 @@ void registrarPeerReceptor() {
     esp_now_del_peer(macESP8266);
     peerReceptorRegistrado = false;
   }
-
   esp_now_peer_info_t peerInfo;
   memset(&peerInfo, 0, sizeof(peerInfo));
   memcpy(peerInfo.peer_addr, macESP8266, 6);
   peerInfo.channel = canalActual;
   peerInfo.encrypt = false;
-  peerInfo.ifidx = WIFI_IF_STA;
+  peerInfo.ifidx   = WIFI_IF_STA;
 
   if (esp_now_add_peer(&peerInfo) == ESP_OK) {
     peerReceptorRegistrado = true;
-    Serial.print("Peer del ESP8266 registrado en canal ");
+    Serial.print("[Peer] ESP8266 registrado en canal ");
     Serial.println(canalActual);
   } else {
-    Serial.println("Error registrando peer del ESP8266.");
+    Serial.println("[Peer] Error registrando ESP8266.");
   }
 }
 
 // ============================================================
-// Escaneo de canales (cuando no estamos sincronizados)
+// Escaneo de canales
 // ============================================================
 void avanzarEscaneo() {
   unsigned long ahora = millis();
   if (ahora - ultimoSaltoEscaneo < tiempoPorCanalEscaneo) return;
-
   ultimoSaltoEscaneo = ahora;
   canalEscaneoActual++;
   if (canalEscaneoActual > 13) canalEscaneoActual = 1;
-
   esp_wifi_set_channel(canalEscaneoActual, WIFI_SECOND_CHAN_NONE);
-  // No se imprime cada salto para no inundar el Serial; solo al sincronizar.
+}
+
+// ============================================================
+// Deep sleep — apaga el ESP32-S3 por la duración indicada
+// ============================================================
+void entrarDeepSleep(uint32_t seg) {
+  Serial.print("[Sleep] Entrando en deep sleep por ");
+  Serial.print(seg / 3600);
+  Serial.println(" horas. Sin lluvia esperada hoy.");
+
+  // Parpadeo azul rápido como indicador visual antes de dormir
+  for (int i = 0; i < 3; i++) {
+    encenderColor(0, 0, 255); delay(200);
+    apagarLED();              delay(200);
+  }
+
+  esp_now_deinit(); // liberar recursos antes de dormir
+  apagarLED();
+
+  // Despertar automático después de `seg` segundos
+  esp_sleep_enable_timer_wakeup((uint64_t)seg * 1000000ULL);
+  esp_deep_sleep_start(); // no retorna
 }
 
 // ============================================================
@@ -186,15 +223,13 @@ void avanzarEscaneo() {
 void setup() {
   Serial.begin(115200);
   delay(200);
-  Serial.println("\n\n=== Emisor ESP32-S3 iniciando ===");
+  Serial.println("\n=== Emisor ESP32-S3 iniciando ===");
 
   pinMode(pinR, OUTPUT);
   pinMode(pinG, OUTPUT);
   pinMode(pinB, OUTPUT);
   apagarLED();
 
-  // WiFi en modo estación, SIN conectarse a ningún router:
-  // esto es ESP-NOW puro entre placas.
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
 
@@ -206,12 +241,12 @@ void setup() {
     delay(3000);
     ESP.restart();
   }
-  Serial.println("ESP-NOW iniciado correctamente.");
+  Serial.println("ESP-NOW iniciado.");
 
   esp_now_register_send_cb(onDataSent);
   esp_now_register_recv_cb(onDataRecv);
 
-  Serial.println("Escaneando canales en busca del anuncio del ESP8266...");
+  Serial.println("Escaneando canales en busca del ESP8266...");
   ultimoSaltoEscaneo = millis();
   esp_wifi_set_channel(canalEscaneoActual, WIFI_SECOND_CHAN_NONE);
 }
@@ -222,22 +257,19 @@ void setup() {
 void loop() {
   unsigned long ahora = millis();
 
-  // --- Si no estamos sincronizados, seguir escaneando canales ---
   if (!sincronizado) {
     avanzarEscaneo();
-    return; // no leer sensor ni enviar nada hasta sincronizar
-  }
-
-  // --- Si nos sincronizamos pero hace mucho que no hay novedades, re-escanear ---
-  if (ahora - ultimoAnuncioRecibido > timeoutSinAnuncio) {
-    Serial.println("Sin anuncios del 8266 hace tiempo. Volviendo a escanear canal...");
-    sincronizado = false;
-    canalEscaneoActual = canalActual; // arrancar el escaneo cerca de donde estábamos
-    ultimoSaltoEscaneo = ahora;
     return;
   }
 
-  // --- Lectura y envío periódico ---
+  if (ahora - ultimoAnuncioRecibido > timeoutSinAnuncio) {
+    Serial.println("[Canal] Sin anuncios. Volviendo a escanear...");
+    sincronizado          = false;
+    canalEscaneoActual    = canalActual;
+    ultimoSaltoEscaneo    = ahora;
+    return;
+  }
+
   if (ahora - ultimoEnvio >= intervaloEnvio) {
     ultimoEnvio = ahora;
     leerYenviar(ahora);
@@ -245,45 +277,32 @@ void loop() {
 }
 
 // ============================================================
-// Lectura de sensor, control de LED y envío ESP-NOW
+// Lectura de sensor, LED y envío por ESP-NOW
 // ============================================================
 void leerYenviar(unsigned long ahora) {
   PaqueteLectura datos;
-  datos.tipo = MSG_LECTURA;
+  datos.tipo        = MSG_LECTURA;
   datos.valorSensor = analogRead(sensorPin);
 
   String nivelActual;
-  if (datos.valorSensor < umbralBajo) {
-    nivelActual = "BAJO";
-  } else if (datos.valorSensor <= umbralIntermedio) {
-    nivelActual = "INTERMEDIO";
-  } else {
-    nivelActual = "ALTO";
-  }
+  if      (datos.valorSensor < umbralBajo)        nivelActual = "BAJO";
+  else if (datos.valorSensor <= umbralIntermedio)  nivelActual = "INTERMEDIO";
+  else                                             nivelActual = "ALTO";
 
   memset(datos.nivel, 0, sizeof(datos.nivel));
   nivelActual.toCharArray(datos.nivel, sizeof(datos.nivel));
 
-  Serial.print("Valor Sensor: ");
-  Serial.print(datos.valorSensor);
-  Serial.print(" | Nivel: ");
-  Serial.println(datos.nivel);
+  Serial.print("Sensor: "); Serial.print(datos.valorSensor);
+  Serial.print(" | Nivel: "); Serial.println(datos.nivel);
 
-  // Control de LED (no bloqueante, respeta el delay mínimo entre cambios)
   if (nivelActual != nivelAnterior && (ahora - ultimoCambioLED >= delayLED)) {
-    if (nivelActual == "BAJO") {
-      encenderColor(0, 255, 0);
-    } else if (nivelActual == "INTERMEDIO") {
-      encenderColor(255, 165, 0);
-    } else {
-      encenderColor(255, 0, 0);
-    }
-    nivelAnterior = nivelActual;
-    ultimoCambioLED = ahora;
+    if      (nivelActual == "BAJO")        encenderColor(0, 255, 0);
+    else if (nivelActual == "INTERMEDIO")  encenderColor(255, 165, 0);
+    else                                   encenderColor(255, 0, 0);
+    nivelAnterior     = nivelActual;
+    ultimoCambioLED   = ahora;
   }
 
-  esp_err_t resultado = esp_now_send(macESP8266, (uint8_t*)&datos, sizeof(datos));
-  if (resultado != ESP_OK) {
-    Serial.println("Error al solicitar envío por ESP-NOW.");
-  }
+  esp_err_t res = esp_now_send(macESP8266, (uint8_t*)&datos, sizeof(datos));
+  if (res != ESP_OK) Serial.println("[ESP-NOW] Error al enviar.");
 }
